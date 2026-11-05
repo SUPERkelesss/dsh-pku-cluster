@@ -60,6 +60,8 @@ OTP_PROMPT = re.compile(r"(?i)verification\s+code\s*:?\s*$")
 DENIED = re.compile(r"(?i)permission\s+denied|authentication\s+failed")
 
 CONTROL_PERSIST = "8h"
+# Mirrors ControlPersist above; used to report the remaining time.
+PERSIST_MS = 8 * 60 * 60 * 1000
 
 
 def slug(value: str) -> str:
@@ -112,6 +114,14 @@ def save_config(conf: dict) -> None:
         path.chmod(0o600)
     except OSError:
         pass
+
+
+def remaining_ms(conf: dict) -> int:
+    """Milliseconds left on this session, judged by when it was established."""
+    started = int(conf.get("connectedAt") or 0)
+    if not started:
+        return 0
+    return max(0, started + PERSIST_MS - int(time.time() * 1000))
 
 
 def control_path(conf: dict) -> str:
@@ -198,6 +208,7 @@ def status(conf: dict) -> dict:
         "reachable": reachable(host, port),
         "user": conf.get("user") or "",
     }
+    base["remainingMs"] = remaining_ms(conf) if base["master"] else 0
     if not base["master"]:
         return base
     try:
@@ -229,6 +240,7 @@ def status_all() -> dict:
             "target": f"{host}:{port}",
             "reachable": reachable(host, port),
             "user": conf.get("user") or "",
+            "remainingMs": remaining_ms(conf) if master_alive(conf) else 0,
         })
     return {"ok": True, "sessions": sessions}
 
@@ -267,6 +279,8 @@ def logout(conf: dict) -> dict:
                        capture_output=True, text=True, timeout=15)
     except Exception:  # noqa: BLE001
         pass
+    conf["connectedAt"] = 0
+    save_config(conf)
     return {"ok": True, "master": master_alive(conf)}
 
 
@@ -362,6 +376,9 @@ def login(conf: dict, password: str, otp: str) -> dict:
     if not host:
         return {"ok": False, "stage": "network", "error": "no default gateway inside WSL"}
     if master_alive(conf):
+        if not conf.get("connectedAt"):
+            conf["connectedAt"] = int(time.time() * 1000)
+            save_config(conf)
         return {"ok": True, "master": True, "already": True, "target": f"{host}:{port}"}
     if not reachable(host, port):
         stage = "relay" if conf.get("mode") == "relay" else "network"
@@ -377,6 +394,9 @@ def login(conf: dict, password: str, otp: str) -> dict:
         return {"ok": False, "stage": stage, "error": detail}
 
     alive = master_alive(conf)
+    if alive:
+        conf["connectedAt"] = int(time.time() * 1000)
+        save_config(conf)
     return {
         "ok": alive,
         "master": alive,

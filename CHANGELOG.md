@@ -9,6 +9,8 @@
 - The session picker is a grouped dropdown (one compact bar instead of rows of pills), disabled
   targets are hidden rather than shown greyed out, and environment warnings sit in a grey footnote.
 - `pku -c <cluster>[:<endpoint>] …` plus `pku sessions`, in both the bash and the Windows helper.
+- Fixed: the sidebar dot polled the retired `/api/status`, so it stayed red on a live connection.
+  It now reads `/api/state`, turns green, and shows the remaining time beside the label.
 - WSL target: one relay per session on a dynamically allocated port (was a fixed 2222); with
   `networkingMode=mirrored` there is no vEthernet, so the relay binds `127.0.0.1` instead.
 - Fixed: `login.py` now uses `pty.fork()`. A bare `openpty()` pty is not a controlling terminal, and
