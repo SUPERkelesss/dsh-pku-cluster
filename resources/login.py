@@ -53,6 +53,9 @@ DEFAULTS = {
     "relayPort": 2222,
     "controlPath": "",
     "user": "",
+    # Epoch ms of the successful login. load_config only copies the fields
+    # listed here, so anything remaining_ms needs must be declared in DEFAULTS.
+    "connectedAt": 0,
 }
 
 PASSWORD_PROMPT = re.compile(r"(?i)password\s*:?\s*$")
