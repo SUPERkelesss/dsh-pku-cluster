@@ -32,6 +32,8 @@ terminal and retyping the password and OTP every few minutes.
 - [Scope](#scope)
 - [Requirements](#requirements)
 - [Install](#install)
+- [Targets (local / WSL)](#targets-local--wsl)
+- [Clusters and sessions (parallel)](#clusters-and-sessions-parallel)
 - [First run](#first-run)
 - [Daily use (`pku`)](#daily-use-pku)
 - [Telling the agent about it](#telling-the-agent-about-it)
@@ -49,8 +51,8 @@ terminal and retyping the password and OTP every few minutes.
 
 ## Scope
 
-**For you if** you have a PKU Teaching-2 account, run DSH on Windows (WSL2) or Linux/macOS, and
-want an agent that can submit jobs for you.
+**For you if** you have a PKU Teaching-2 account, run DSH on Windows (with or without WSL) or
+Linux/macOS, and want an agent that can submit jobs for you.
 
 **Not for you if**
 
@@ -69,7 +71,7 @@ want an agent that can submit jobs for you.
 | Account | PKU Teaching-2 login | your student/staff id |
 | OTP | bound at <https://hpc.pku.edu.cn/authotp/otp> | FreeOTP, Google Authenticator…; the phone clock must be accurate |
 | Network | campus network, or the university VPN when off campus | iSecSP on Windows |
-| OS | Windows 11 + WSL2, or Linux / macOS | on Windows a WSL2 distro is required (the plugin picks the first from `wsl -l -q`) |
+| OS | Windows 11 (WSL2) or Linux / macOS | the **Windows-local target is disabled** (native ssh cannot reuse a connection), so Windows needs at least one WSL distro |
 | Tools | `ssh`, `rsync` | usually present in WSL; `sudo apt install openssh-client rsync` if not |
 | DSH | able to install local plugins | host + client parts |
 
@@ -113,6 +115,47 @@ Upgrade by re-running `add`; to remove, see [Files and uninstall](#files-and-uni
 
 > Do not install two copies of this plugin into one profile — package name, route prefix and the
 > client module id would collide.
+
+---
+
+## Targets (local / WSL)
+
+The bar at the top of the page ("运行于") picks the execution target, i.e. **where the plugin runs
+ssh and the helper scripts**:
+
+| Target | What it uses | When |
+|---|---|---|
+| `本机` (Windows) | — | **disabled**: native Windows ssh cannot reuse a connection (no fd passing) |
+| `本机` (Linux / macOS) | the system `bash` + `ssh` | native Linux / macOS |
+| a WSL distro | `bash` + `python3` inside `wsl.exe -d <distro>` | you want the WSL toolchain (rsync, your shell) |
+
+- Switching takes effect immediately; the page re-reads the connection state. The choice is stored in
+  `~/.pku-cluster/target.json` and restored next time.
+- A stopped distro can still be picked — `wsl.exe` starts it.
+**The Windows-local target is disabled.** Native Windows ssh cannot reuse a connection: Win32-OpenSSH
+cannot create a ControlMaster at all, and MSYS ssh can create one but cannot hand a session to it
+(no fd passing), so every command would ask for a fresh OTP. Use a WSL distribution.
+
+---
+
+## Clusters and sessions (parallel)
+
+Four clusters, seven endpoints:
+
+| Cluster | Login node | Data-transfer node |
+|---|---|---|
+| 未名教学二号 | `wmjx2-login.pku.edu.cn` | — |
+| 未名一号 | `wm1-login.pku.edu.cn` | `wm1-data.pku.edu.cn` |
+| 未名生科一号 | `wmsk1-login.pku.edu.cn` | `wmsk1-data.pku.edu.cn` |
+| 未名二号 | `wm2-login.pku.edu.cn` | `wm2-data.pku.edu.cn` |
+
+The second bar is a grouped dropdown listing **every cluster × endpoint** as a session (`wm1:login`, `wm1:data`, …);
+connected ones are marked "已连接".
+
+- **Parallel**: a login affects one session only. You can keep 未名一号 and 未名二号 connected at the same
+  time, each for 8 hours; on a WSL target every session gets its own relay port.
+- The account id is stored per session and inherited from the old `config.json` on first run.
+- The catalogue is `~/.pku-cluster/clusters.json`; a cluster you delete there does not come back.
 
 ---
 
@@ -286,13 +329,16 @@ require moving the relay into a standalone service, which this build does not sh
 
 ## Files and uninstall
 
-The plugin writes three files under `~/.pku-cluster/`:
+The plugin writes these files under `~/.pku-cluster/`:
 
 | File | Mode | Purpose |
 |---|---|---|
-| `login.py` | `700` | login driver (stdlib pty, no third-party packages) |
-| `pku` | `700` | command-line helper (`status`/`run`/`push`/`pull`/`sbatch`…) |
-| `config.json` | `600` | connection parameters + account id |
+| `login.py` | `700` | login driver (stdlib pty, no third-party packages); bash targets |
+| `pku` | `700` | command-line helper (`status`/`run`/`push`/`pull`/`sbatch`…); bash targets |
+| `askpass.cmd` / `askpass.cjs` | - | Windows local target only: hands the password and OTP to ssh, never on disk |
+| `pku.cmd` / `pku.cjs` | - | Windows local target only: same verbs as `pku`, uploads via `scp` |
+| `config.json` | `600` | connection parameters + account id (belongs to the target) |
+| `target.json` | - | the target selected in the page bar (belongs to the host) |
 | `cm/` | `700` | ControlMaster socket directory (`ssh -O check/exit`); deleting it drops the reuse |
 
 **Uninstall**
