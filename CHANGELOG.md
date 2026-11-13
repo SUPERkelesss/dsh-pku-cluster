@@ -17,8 +17,9 @@
 
 **Fixes**
 
-- DSH 0.2.1 declares the sidebar footer seat as a list slot, so the entry now registers with `key`;
-  the 0.1.x runtime used `id`, and against the new contract that registration was rejected.
+- DSH 0.2.1 list slots address their entries by `id`. Registering with any other field throws while
+  the client bundle loads, so a wrong key hides the entry *and* takes the whole sidebar down; `apply()`
+  now also returns quietly when the `slots` service is absent instead of throwing.
 - The sidebar dot polled the retired `/api/status`, so it stayed red on a live connection. It now reads
   `/api/state`, turns green, and shows the remaining time beside the label; an idle session is a light
   grey dot rather than an alarm. `connectedAt` also survives `DEFAULTS` merging and session syncs.
